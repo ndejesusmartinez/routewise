@@ -2,7 +2,7 @@ from collections.abc import Generator
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
@@ -15,6 +15,31 @@ from app.schemas.persistence import (
     VehicleResponse,
 )
 
+from app.db.models import (
+    DeliveryPlan,
+    DeliveryPlanRoute,
+    DeliveryPlanRouteOrder,
+    Order,
+    Vehicle,
+)
+
+from app.schemas.history import (
+    OrderHistoryResponse,
+    OrderPlanHistoryItem,
+)
+
+from sqlalchemy import select
+
+from app.schemas.route_tracking import (
+    RouteStopResponse,
+    VehicleRouteResponse,
+    VehicleRoutesResponse,
+)
+
+from sqlalchemy import func, select
+
+from app.db.models import DeliveryPlan, Order, Vehicle
+from app.schemas.dashboard import DashboardSummaryResponse
 
 router = APIRouter(prefix="/api/v1", tags=["Resources"])
 
@@ -126,8 +151,201 @@ def update_order_status(
     try:
         db.commit()
         db.refresh(order)
-    except Exception:
+    except SQLAlchemyError:
         db.rollback()
-        raise
+        raise HTTPException(
+            status_code=500,
+            detail="Could not update order status.",
+        )
 
     return order
+
+
+
+@router.get(
+    "/orders/{order_id}/history",
+    response_model=OrderHistoryResponse,
+)
+def get_order_history(
+    order_id: str,
+    db: Session = Depends(get_db),
+) -> OrderHistoryResponse:
+    order = db.scalar(
+        select(Order).where(Order.order_id == order_id)
+    )
+
+    if order is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Order not found.",
+        )
+
+    history_rows = db.execute(
+        select(
+            DeliveryPlan.id,
+            DeliveryPlan.created_at,
+            DeliveryPlanRoute.vehicle_id,
+            DeliveryPlanRouteOrder.stop_sequence,
+            DeliveryPlanRoute.distance_meters,
+            DeliveryPlanRoute.duration_seconds,
+            DeliveryPlanRoute.load,
+            DeliveryPlanRoute.capacity,
+        )
+        .join(
+            DeliveryPlanRoute,
+            DeliveryPlanRoute.plan_id == DeliveryPlan.id,
+        )
+        .join(
+            DeliveryPlanRouteOrder,
+            DeliveryPlanRouteOrder.route_id == DeliveryPlanRoute.id,
+        )
+        .where(DeliveryPlanRouteOrder.order_id == order_id)
+        .order_by(
+            DeliveryPlan.created_at.desc(),
+            DeliveryPlan.id.desc(),
+        )
+    ).all()
+
+    plans = [
+        OrderPlanHistoryItem(
+            plan_id=row[0],
+            plan_created_at=row[1],
+            vehicle_id=row[2],
+            stop_sequence=row[3],
+            distance_meters=row[4],
+            duration_seconds=row[5],
+            load=row[6],
+            capacity=row[7],
+        )
+        for row in history_rows
+    ]
+
+    return OrderHistoryResponse(
+        order_id=order.order_id,
+        status=order.status,
+        demand=order.demand,
+        created_at=order.created_at,
+        plans=plans,
+    )
+
+
+@router.get(
+    "/vehicles/{vehicle_id}/routes",
+    response_model=VehicleRoutesResponse,
+)
+def get_vehicle_routes(
+    vehicle_id: str,
+    db: Session = Depends(get_db),
+) -> VehicleRoutesResponse:
+    vehicle = db.scalar(
+        select(Vehicle).where(Vehicle.vehicle_id == vehicle_id)
+    )
+
+    if vehicle is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Vehicle not found.",
+        )
+
+    route_rows = db.execute(
+        select(DeliveryPlanRoute, DeliveryPlan)
+        .join(
+            DeliveryPlan,
+            DeliveryPlan.id == DeliveryPlanRoute.plan_id,
+        )
+        .where(DeliveryPlanRoute.vehicle_id == vehicle_id)
+        .order_by(
+            DeliveryPlan.created_at.desc(),
+            DeliveryPlan.id.desc(),
+            DeliveryPlanRoute.id.desc(),
+        )
+    ).all()
+
+    routes = []
+
+    for route, plan in route_rows:
+        stop_rows = db.execute(
+            select(DeliveryPlanRouteOrder, Order)
+            .outerjoin(
+                Order,
+                Order.order_id == DeliveryPlanRouteOrder.order_id,
+            )
+            .where(DeliveryPlanRouteOrder.route_id == route.id)
+            .order_by(DeliveryPlanRouteOrder.stop_sequence)
+        ).all()
+
+        stops = [
+            RouteStopResponse(
+                order_id=route_order.order_id,
+                stop_sequence=route_order.stop_sequence,
+                status=order.status if order else None,
+                demand=order.demand if order else None,
+                latitude=order.latitude if order else None,
+                longitude=order.longitude if order else None,
+            )
+            for route_order, order in stop_rows
+        ]
+
+        routes.append(
+            VehicleRouteResponse(
+                plan_id=plan.id,
+                plan_created_at=plan.created_at,
+                vehicle_id=route.vehicle_id,
+                distance_meters=route.distance_meters,
+                duration_seconds=route.duration_seconds,
+                load=route.load,
+                capacity=route.capacity,
+                stops=stops,
+            )
+        )
+
+    return VehicleRoutesResponse(
+        vehicle_id=vehicle_id,
+        routes=routes,
+    )
+
+
+
+@router.get(
+    "/dashboard/summary",
+    response_model=DashboardSummaryResponse,
+)
+def get_dashboard_summary(
+    db: Session = Depends(get_db),
+) -> DashboardSummaryResponse:
+    statuses = [
+        "PENDING",
+        "ASSIGNED",
+        "IN_TRANSIT",
+        "DELIVERED",
+        "CANCELLED",
+    ]
+
+    status_rows = db.execute(
+        select(Order.status, func.count(Order.id))
+        .group_by(Order.status)
+    ).all()
+
+    orders_by_status = {status: 0 for status in statuses}
+
+    for order_status, count in status_rows:
+        orders_by_status[order_status] = count
+
+    total_orders = db.scalar(
+        select(func.count()).select_from(Order)
+    ) or 0
+
+    total_vehicles = db.scalar(
+        select(func.count()).select_from(Vehicle)
+    ) or 0
+
+    total_plans = db.scalar(
+        select(func.count()).select_from(DeliveryPlan)
+    ) or 0
+
+    return DashboardSummaryResponse(
+        total_orders=total_orders,
+        orders_by_status=orders_by_status,
+        total_vehicles=total_vehicles,
+        total_plans=total_plans,
+    )

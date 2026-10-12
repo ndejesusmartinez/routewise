@@ -326,6 +326,7 @@ def create_registered_delivery_plan(
     ]
 
     if missing_orders or missing_vehicles:
+        db.rollback()
         raise HTTPException(
             status_code=404,
             detail={
@@ -333,6 +334,24 @@ def create_registered_delivery_plan(
                 "missing_vehicle_ids": missing_vehicles,
             },
         )
+
+    # Solo los pedidos pendientes pueden asignarse a un nuevo plan.
+    unavailable_orders = [
+        order_id
+        for order_id in request.order_ids
+        if orders_by_id[order_id].status != "PENDING"
+    ]
+
+    if unavailable_orders:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "message": "Only pending orders can be planned.",
+                "order_ids": unavailable_orders,
+            },
+        )
+
 
     # Respetar el orden solicitado por el cliente.
     orders = [
@@ -393,11 +412,13 @@ def create_registered_delivery_plan(
             vehicles=vehicles,
         )
     except ValueError as exc:
+        db.rollback()
         raise HTTPException(
             status_code=422,
             detail=str(exc),
         ) from exc
     except RuntimeError as exc:
+        db.rollback()
         raise HTTPException(
             status_code=502,
             detail=str(exc),
