@@ -242,6 +242,7 @@ def get_delivery_plan(
             "duration_seconds": route.duration_seconds,
             "load": route.load,
             "capacity": route.capacity,
+            "geometry": route.route_geometry,
         })
 
     return DeliveryPlanResponse(

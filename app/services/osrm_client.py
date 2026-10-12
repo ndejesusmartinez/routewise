@@ -1,7 +1,12 @@
-import httpx
+from json import JSONDecodeError
 
+import httpx
+from pydantic import ValidationError
+
+from app.schemas.geometry import GeoJSONLineString
 
 OSRM_TABLE_URL = "https://router.project-osrm.org/table/v1/driving"
+OSRM_ROUTE_URL = "https://router.project-osrm.org/route/v1/driving"
 
 
 def build_distance_matrix(locations: list[dict]) -> dict:
@@ -64,3 +69,59 @@ def build_distance_matrix(locations: list[dict]) -> dict:
             for row in durations
         ],
     }
+
+
+def build_route_geometry(
+    locations: list[dict],
+) -> GeoJSONLineString | None:
+    if len(locations) < 2:
+        raise ValueError("At least two locations are required.")
+
+    coordinates = ";".join(
+        f"{location['longitude']},{location['latitude']}"
+        for location in locations
+    )
+    url = f"{OSRM_ROUTE_URL}/{coordinates}"
+
+    try:
+        response = httpx.get(
+            url,
+            params={
+                "overview": "full",
+                "geometries": "geojson",
+                "steps": "false",
+            },
+            timeout=20.0,
+            headers={"User-Agent": "RouteWise/0.1.0"},
+        )
+        response.raise_for_status()
+        data = response.json()
+    except (httpx.HTTPError, JSONDecodeError) as exc:
+        raise RuntimeError(
+            "Could not connect to the OSRM routing service."
+        ) from exc
+
+    if not isinstance(data, dict):
+        return None
+
+    if data.get("code") != "Ok":
+        raise RuntimeError(
+            f"OSRM returned an error: {data.get('code', 'Unknown error')}"
+        )
+
+    routes = data.get("routes")
+    if not isinstance(routes, list) or not routes:
+        return None
+
+    route = routes[0]
+    if not isinstance(route, dict):
+        return None
+
+    geometry = route.get("geometry")
+    if not isinstance(geometry, dict):
+        return None
+
+    try:
+        return GeoJSONLineString.model_validate(geometry)
+    except ValidationError:
+        return None

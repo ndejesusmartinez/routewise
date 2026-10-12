@@ -5,6 +5,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    JSON,
     String,
     func,
 )
@@ -71,6 +72,7 @@ class DeliveryPlanRoute(Base):
     duration_seconds: Mapped[int] = mapped_column(Integer)
     load: Mapped[int] = mapped_column(Integer)
     capacity: Mapped[int] = mapped_column(Integer)
+    route_geometry: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class DeliveryPlanRouteOrder(Base):

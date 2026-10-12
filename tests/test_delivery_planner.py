@@ -25,6 +25,17 @@ def test_plan_deliveries_assigns_orders_and_respects_capacity(monkeypatch):
         "build_distance_matrix",
         fake_build_distance_matrix,
     )
+    geometry_calls = []
+
+    def fake_build_route_geometry(locations):
+        geometry_calls.append(locations)
+        return None
+
+    monkeypatch.setattr(
+        delivery_planner,
+        "build_route_geometry",
+        fake_build_route_geometry,
+    )
 
     result = delivery_planner.plan_deliveries(
         depot={
@@ -71,6 +82,81 @@ def test_plan_deliveries_assigns_orders_and_respects_capacity(monkeypatch):
         assert route["load"] <= route["capacity"]
 
     assert result["provider"] == "OSRM"
+    assert len(geometry_calls) == 2
+    for route_locations in geometry_calls:
+        assert route_locations[0] == {
+            "latitude": 4.60971,
+            "longitude": -74.08175,
+        }
+        assert route_locations[-1] == route_locations[0]
+
+
+def test_plan_deliveries_preserves_optimizer_route_for_geometry(monkeypatch):
+    monkeypatch.setattr(
+        delivery_planner,
+        "build_distance_matrix",
+        lambda locations: {
+            "distance_matrix": [
+                [0, 100, 200],
+                [100, 0, 150],
+                [200, 150, 0],
+            ],
+            "duration_matrix": [
+                [0, 60, 120],
+                [60, 0, 90],
+                [120, 90, 0],
+            ],
+        },
+    )
+    geometry_calls = []
+
+    def fake_build_route_geometry(locations):
+        geometry_calls.append(locations)
+        return None
+
+    monkeypatch.setattr(
+        delivery_planner,
+        "build_route_geometry",
+        fake_build_route_geometry,
+    )
+
+    result = delivery_planner.plan_deliveries(
+        depot={
+            "location_id": "DEPOT-001",
+            "latitude": 4.60971,
+            "longitude": -74.08175,
+        },
+        orders=[
+            {
+                "order_id": "ORD-001",
+                "demand": 1,
+                "latitude": 4.65333,
+                "longitude": -74.08365,
+            },
+            {
+                "order_id": "ORD-002",
+                "demand": 1,
+                "latitude": 4.6351,
+                "longitude": -74.0703,
+            },
+        ],
+        vehicles=[{"vehicle_id": "VEH-001", "capacity": 2}],
+    )
+
+    assert len(geometry_calls) == 1
+    locations_by_order_id = {
+        "ORD-001": {"latitude": 4.65333, "longitude": -74.08365},
+        "ORD-002": {"latitude": 4.6351, "longitude": -74.0703},
+    }
+    expected_locations = [
+        {"latitude": 4.60971, "longitude": -74.08175},
+        *[
+            locations_by_order_id[order_id]
+            for order_id in result["routes"][0]["order_ids"]
+        ],
+        {"latitude": 4.60971, "longitude": -74.08175},
+    ]
+    assert geometry_calls[0] == expected_locations
 
 
 def test_plan_deliveries_handles_osrm_failure(monkeypatch):

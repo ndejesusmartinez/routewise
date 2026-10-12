@@ -296,6 +296,7 @@ def get_vehicle_routes(
                 load=route.load,
                 capacity=route.capacity,
                 stops=stops,
+                geometry=route.route_geometry,
             )
         )
 

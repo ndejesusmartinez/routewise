@@ -17,6 +17,7 @@ Built with Python and FastAPI, the project combines optimization algorithms, roa
 - **Vehicle management:** Register vehicles and their delivery capacities.
 - **Delivery lifecycle:** Track orders through `PENDING`, `ASSIGNED`, `IN_TRANSIT`, `DELIVERED`, and `CANCELLED` states.
 - **Vehicle route tracking:** Retrieve saved routes and ordered delivery stops for a vehicle.
+- **Road-route geometry:** Return each optimized route's saved road geometry as a GeoJSON `LineString`.
 - **Order history:** Review delivery plans associated with an order.
 - **Operational dashboard:** Retrieve order counts by status, registered vehicles, and saved delivery plans.
 - **Interactive API documentation:** Explore endpoints using Swagger UI.
@@ -70,7 +71,7 @@ RouteWise separates API handling, request validation, business logic, optimizati
             PostgreSQL
 ```
 
-The road-routing integration supplies distance or duration information when required by the relevant planning workflow. OR-Tools uses the optimization inputs to calculate delivery routes.
+The road-routing integration uses the OSRM Table API for distance and duration matrices. After optimization, the OSRM Route API retrieves the road geometry for each non-empty route, including its existing depot start and return. Geometry is saved with the delivery plan to avoid repeated routing requests and to preserve the planned historical route. If OSRM returns no usable geometry, the API returns `null` rather than drawing an estimated straight-line path.
 
 ## Project Structure
 
@@ -86,6 +87,7 @@ routewise/
 │   │   ├── init_db.py
 │   │   └── migrations/
 │   ├── schemas/
+│   │   ├── geometry.py
 │   │   ├── dashboard.py
 │   │   ├── history.py
 │   │   ├── location.py
@@ -169,6 +171,12 @@ python -m app.db.init_db
 
 Apply any additional migrations required by the current application schema, following the scripts in `app/db/migrations/`.
 
+For an existing database, apply the nullable route geometry column migration once:
+
+```powershell
+python -m app.db.migrations.add_route_geometry
+```
+
 ### 6. Run the API
 
 ```powershell
@@ -197,6 +205,14 @@ The API provides operations for:
 | Dashboard | Summarize order statuses, vehicles, and plans |
 
 For exact paths, parameters, and request/response schemas, start the API and inspect `/docs`.
+
+The following endpoints include route geometry:
+
+- `POST /api/v1/routes/plan-deliveries` and `POST /api/v1/routes/plan-registered` return each route's geometry in the newly created plan.
+- `GET /api/v1/routes/plans/{plan_id}` returns the geometry saved with the plan.
+- `GET /api/v1/vehicles/{vehicle_id}/routes` returns saved geometry alongside vehicle route tracking information.
+
+Geometry uses GeoJSON `LineString` coordinates in `[longitude, latitude]` order. The geometry is nullable for legacy plans and for routes where OSRM does not provide usable geometry; the API never fabricates geometry from stop markers.
 
 ## Order Lifecycle
 

@@ -100,6 +100,13 @@ def mock_planner(monkeypatch):
                     "duration_seconds": 600,
                     "load": sum(order["demand"] for order in orders),
                     "capacity": vehicles[0]["capacity"],
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [
+                            [-75.5, 10.4],
+                            [-75.5225, 10.4631],
+                        ],
+                    },
                 }
             ],
             "total_distance_meters": 1500,
@@ -146,6 +153,10 @@ def test_registered_plan_persists_and_assigns_orders(
     assert data["routes"][0]["order_ids"] == [
         registered_resources["order_id"]
     ]
+    assert data["routes"][0]["geometry"] == {
+        "type": "LineString",
+        "coordinates": [[-75.5, 10.4], [-75.5225, 10.4631]],
+    }
 
     with test_db() as db:
         order = db.scalar(
@@ -161,6 +172,92 @@ def test_registered_plan_persists_and_assigns_orders(
         assert plan_count == 1
 
     assert mock_planner["count"] == 1
+
+
+def test_saved_plan_and_vehicle_routes_return_persisted_geometry(
+    client,
+    registered_resources,
+    mock_planner,
+):
+    created = client.post(
+        "/api/v1/routes/plan-registered",
+        json=plan_payload(registered_resources),
+    )
+    assert created.status_code == 201
+
+    plan = client.get(
+        f"/api/v1/routes/plans/{created.json()['plan_id']}"
+    )
+    vehicle_routes = client.get(
+        f"/api/v1/vehicles/{registered_resources['vehicle_id']}/routes"
+    )
+
+    assert plan.status_code == 200
+    assert plan.json()["routes"][0]["geometry"] == created.json()["routes"][0][
+        "geometry"
+    ]
+    assert vehicle_routes.status_code == 200
+    route = vehicle_routes.json()["routes"][0]
+    assert route["geometry"] == created.json()["routes"][0]["geometry"]
+    assert route["plan_id"] == created.json()["plan_id"]
+    assert route["vehicle_id"] == registered_resources["vehicle_id"]
+    assert route["distance_meters"] == 1500
+    assert route["duration_seconds"] == 600
+    assert route["load"] == 3
+    assert route["capacity"] == 10
+    assert route["stops"][0]["order_id"] == registered_resources["order_id"]
+    assert route["stops"][0]["latitude"] == 10.4631
+    assert route["stops"][0]["longitude"] == -75.5225
+
+    assert mock_planner["count"] == 1
+
+
+def test_vehicle_routes_return_null_for_unavailable_geometry(
+    client,
+    registered_resources,
+    monkeypatch,
+):
+    def plan_without_geometry(depot, orders, vehicles):
+        return {
+            "routes": [
+                {
+                    "vehicle_id": vehicles[0]["vehicle_id"],
+                    "order_ids": [orders[0]["order_id"]],
+                    "distance_meters": 1500,
+                    "duration_seconds": 600,
+                    "load": orders[0]["demand"],
+                    "capacity": vehicles[0]["capacity"],
+                    "geometry": None,
+                }
+            ],
+            "total_distance_meters": 1500,
+            "total_duration_seconds": 600,
+            "provider": "OSRM",
+        }
+
+    monkeypatch.setattr(
+        routes_api,
+        "plan_deliveries",
+        plan_without_geometry,
+    )
+    created = client.post(
+        "/api/v1/routes/plan-registered",
+        json=plan_payload(registered_resources),
+    )
+    assert created.status_code == 201
+
+    vehicle_routes = client.get(
+        f"/api/v1/vehicles/{registered_resources['vehicle_id']}/routes"
+    )
+
+    assert vehicle_routes.status_code == 200
+    route = vehicle_routes.json()["routes"][0]
+    assert route["geometry"] is None
+    assert route["stops"][0]["order_id"] == registered_resources["order_id"]
+    assert route["distance_meters"] == 1500
+    assert route["duration_seconds"] == 600
+    assert route["load"] == 3
+    assert route["capacity"] == 10
 
 
 def test_assigned_order_cannot_be_planned_twice(

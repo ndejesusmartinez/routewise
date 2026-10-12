@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field, model_validator
 from datetime import datetime   
 
+from app.schemas.geometry import GeoJSONLineString
+
 class PlanningDepot(BaseModel):
     location_id: str = Field(default="DEPOT-001", min_length=1, max_length=50)
     latitude: float = Field(ge=-90, le=90)
@@ -55,6 +57,13 @@ class PlannedRoute(BaseModel):
     duration_seconds: int
     load: int
     capacity: int
+    geometry: GeoJSONLineString | None = Field(
+        default=None,
+        description=(
+            "GeoJSON LineString road geometry; null when unavailable "
+            "or for legacy routes."
+        ),
+    )
 
 
 class DeliveryPlanResponse(BaseModel):

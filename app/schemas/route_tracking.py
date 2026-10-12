@@ -1,7 +1,9 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.schemas.geometry import GeoJSONLineString
 
 
 class RouteStopResponse(BaseModel):
@@ -22,6 +24,13 @@ class VehicleRouteResponse(BaseModel):
     load: int
     capacity: int
     stops: list[RouteStopResponse]
+    geometry: GeoJSONLineString | None = Field(
+        default=None,
+        description=(
+            "GeoJSON LineString road geometry; null when unavailable "
+            "or for legacy routes."
+        ),
+    )
 
 
 class VehicleRoutesResponse(BaseModel):

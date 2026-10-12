@@ -26,6 +26,7 @@ def persist_delivery_plan(db: Session, result: dict, commit: bool = True,) -> De
                 duration_seconds=route_data["duration_seconds"],
                 load=route_data["load"],
                 capacity=route_data["capacity"],
+                route_geometry=route_data.get("geometry"),
             )
             db.add(route)
             db.flush()
