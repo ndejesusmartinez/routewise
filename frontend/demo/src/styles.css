@@ -1,0 +1,262 @@
+:root {
+  font-family: Inter, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #0f172a;
+  background: #f8fafc;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  min-height: 100%;
+  min-width: 0;
+  background: #f8fafc;
+}
+
+body {
+  min-height: 100vh;
+}
+
+button, input, select, textarea {
+  font: inherit;
+}
+
+.demo-shell {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 3rem;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #475569;
+}
+
+h1 {
+  margin: 0.2rem 0 0;
+  font-size: clamp(2rem, 3vw, 3rem);
+}
+
+.plan-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7rem 1rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.18);
+}
+
+.selector-panel,
+.route-selector {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  border: 1px solid #dfe7ef;
+  border-radius: 1rem;
+}
+
+.selector-panel {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+}
+
+.route-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1rem;
+}
+
+.route-selector.single {
+  align-items: flex-start;
+}
+
+.route-selector-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.route-selector select {
+  width: min(100%, 420px);
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.75rem;
+  background: #fff;
+  color: #0f172a;
+  font-weight: 600;
+}
+
+.summary-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: 1.5rem;
+}
+
+.summary-card {
+  background: linear-gradient(135deg, #ffffff 0%, #eef4ff 100%);
+  border: 1px solid #dfe7ef;
+  border-radius: 0.875rem;
+  padding: 1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label {
+  color: #64748b;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.summary-card strong {
+  font-size: clamp(1.4rem, 2vw, 2rem);
+}
+
+.dashboard-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  align-items: start;
+}
+
+.map-panel,
+.detail-panel,
+.orders-panel,
+.state-panel {
+  background: #fff;
+  border: 1px solid #dfe7ef;
+  border-radius: 1rem;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+}
+
+.map-panel,
+.detail-panel,
+.orders-panel {
+  padding: 1rem;
+}
+
+.panel-header {
+  margin-bottom: 0.85rem;
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.detail-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.orders-panel {
+  margin-top: 1.5rem;
+}
+
+.orders-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.orders-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid #edf2f7;
+  background: #f8fafc;
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.order-index {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 9999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.empty-inline,
+.state-panel {
+  padding: 1.25rem;
+  color: #475569;
+}
+
+.state-panel {
+  display: grid;
+  place-items: center;
+  gap: 0.5rem;
+  min-height: 180px;
+  background: #fff;
+  border: 1px solid #dfe7ef;
+  border-radius: 1rem;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.04);
+}
+
+.state-panel h2 {
+  margin: 0;
+  color: #0f172a;
+}
+
+.error-panel {
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+.spinner {
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 3px solid rgba(37, 99, 235, 0.2);
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 840px) {
+  .summary-grid,
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

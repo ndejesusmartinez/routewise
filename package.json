@@ -1,0 +1,13 @@
+{
+  "name": "routewise-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "frontend/demo",
+    "packages/react-ui"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @routewise/react-ui && npm run build --workspace routewise-demo",
+    "dev": "npm run dev --workspace routewise-demo"
+  }
+}
