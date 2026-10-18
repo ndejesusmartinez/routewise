@@ -9,60 +9,163 @@ export interface RoutePlanResponse {
   provider: string;
 }
 
-const defaultApiBaseUrl = 'http://127.0.0.1:8000';
-const resolvedApiBaseUrl = (import.meta.env.VITE_ROUTEWISE_API_URL ?? defaultApiBaseUrl).replace(/\/$/, '');
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+export interface PlanSummary {
+  plan_id: number;
+  created_at: string;
+  total_distance_meters: number;
+  total_duration_seconds: number;
+  provider: string;
 }
 
-function isRouteData(value: unknown): value is RouteData {
-  if (!isRecord(value)) {
-    return false;
+export type OrderStatus = 'PENDING' | 'ASSIGNED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+
+export interface Order {
+  id: number;
+  order_id: string;
+  demand: number;
+  latitude: number;
+  longitude: number;
+  created_at: string;
+  status: OrderStatus;
+}
+
+export interface Vehicle {
+  id: number;
+  vehicle_id: string;
+  capacity: number;
+}
+
+export interface DashboardSummary {
+  total_orders: number;
+  orders_by_status: Record<string, number>;
+  total_vehicles: number;
+  total_plans: number;
+}
+
+export interface CreateOrderInput {
+  order_id: string;
+  demand: number;
+  latitude: number;
+  longitude: number;
+}
+
+export interface CreateVehicleInput {
+  vehicle_id: string;
+  capacity: number;
+}
+
+export interface CreateRegisteredPlanInput {
+  depot: {
+    location_id: string;
+    latitude: number;
+    longitude: number;
+  };
+  order_ids: string[];
+  vehicle_ids: string[];
+}
+
+const defaultApiBaseUrl = 'http://127.0.0.1:8000';
+const apiBaseUrl = (import.meta.env.VITE_ROUTEWISE_API_URL ?? defaultApiBaseUrl).replace(/\/$/, '');
+
+function getErrorMessage(payload: unknown, status: number): string {
+  if (typeof payload === 'object' && payload !== null && 'detail' in payload) {
+    const detail = payload.detail;
+
+    if (typeof detail === 'string') {
+      return detail;
+    }
+
+    if (detail !== undefined) {
+      return JSON.stringify(detail);
+    }
   }
 
-  return (
-    typeof value.vehicle_id === 'string' &&
-    Array.isArray(value.order_ids) &&
-    typeof value.distance_meters === 'number' &&
-    typeof value.duration_seconds === 'number' &&
-    typeof value.load === 'number' &&
-    typeof value.capacity === 'number' &&
-    (value.geometry === null || (isRecord(value.geometry) && value.geometry.type === 'LineString'))
-  );
+  return `La solicitud falló (HTTP ${status}).`;
 }
 
-export async function fetchRoutePlan(planId: number): Promise<RoutePlanResponse> {
-  const url = new URL(`/api/v1/routes/plans/${planId}`, `${resolvedApiBaseUrl}/`).toString();
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let response: Response;
 
-  const response = await fetch(url, {
-    headers: {
-      Accept: 'application/json'
+  try {
+    response = await fetch(`${apiBaseUrl}${path}`, {
+      ...init,
+      headers: {
+        Accept: 'application/json',
+        ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+        ...init.headers
+      }
+    });
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new Error(`No se pudo conectar con la API en ${apiBaseUrl}. Verifica que el backend esté ejecutándose.`);
     }
-  });
+
+    throw error;
+  }
 
   if (!response.ok) {
-    throw new Error(`No se pudo cargar el plan ${planId}. Código HTTP ${response.status}.`);
+    let payload: unknown = null;
+
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+
+    throw new Error(getErrorMessage(payload, response.status));
   }
 
-  const payload: unknown = await response.json();
-
-  if (!isRecord(payload)) {
-    throw new Error('La respuesta del backend no tiene un formato válido.');
+  try {
+    return await response.json() as T;
+  } catch {
+    throw new Error('La API devolvió una respuesta JSON inválida.');
   }
+}
 
-  const routes = Array.isArray(payload.routes) ? payload.routes.filter(isRouteData) : [];
+export function fetchDashboardSummary(): Promise<DashboardSummary> {
+  return request('/api/v1/dashboard/summary');
+}
 
-  if (!Array.isArray(payload.routes)) {
-    throw new Error('La respuesta del backend no incluye la lista de rutas.');
-  }
+export function fetchOrders(): Promise<Order[]> {
+  return request('/api/v1/orders');
+}
 
-  return {
-    plan_id: typeof payload.plan_id === 'number' ? payload.plan_id : planId,
-    created_at: typeof payload.created_at === 'string' ? payload.created_at : new Date().toISOString(),
-    routes,
-    total_distance_meters: typeof payload.total_distance_meters === 'number' ? payload.total_distance_meters : 0,
-    total_duration_seconds: typeof payload.total_duration_seconds === 'number' ? payload.total_duration_seconds : 0,
-    provider: typeof payload.provider === 'string' ? payload.provider : 'unknown'
-  };
+export function fetchVehicles(): Promise<Vehicle[]> {
+  return request('/api/v1/vehicles');
+}
+
+export function fetchPlans(): Promise<PlanSummary[]> {
+  return request('/api/v1/routes/plans?limit=50');
+}
+
+export function fetchRoutePlan(planId: number): Promise<RoutePlanResponse> {
+  return request(`/api/v1/routes/plans/${planId}`);
+}
+
+export function createOrder(order: CreateOrderInput): Promise<Order> {
+  return request('/api/v1/orders', {
+    method: 'POST',
+    body: JSON.stringify(order)
+  });
+}
+
+export function createVehicle(vehicle: CreateVehicleInput): Promise<Vehicle> {
+  return request('/api/v1/vehicles', {
+    method: 'POST',
+    body: JSON.stringify(vehicle)
+  });
+}
+
+export function updateOrderStatus(orderId: string, status: OrderStatus): Promise<Order> {
+  return request(`/api/v1/orders/${encodeURIComponent(orderId)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status })
+  });
+}
+
+export function createRegisteredPlan(plan: CreateRegisteredPlanInput): Promise<RoutePlanResponse> {
+  return request('/api/v1/routes/plan-registered', {
+    method: 'POST',
+    body: JSON.stringify(plan)
+  });
 }

@@ -1,12 +1,12 @@
 # RouteWise
 
-**Intelligent Delivery Route Optimization API**
+**Delivery planning and route optimization MVP**
 
-RouteWise is a backend application for delivery planning, vehicle capacity management, route optimization, and operational tracking.
+RouteWise is a full-stack MVP for delivery operations. It combines a FastAPI backend with a React web dashboard and an Expo React Native app that share the same API.
 
-Built with Python and FastAPI, the project combines optimization algorithms, road-routing data, and PostgreSQL persistence to help organize delivery operations.
+The project supports order and vehicle management, capacity-aware delivery planning, route visualization, and delivery status tracking. Route plans are generated with Google OR-Tools and road-network data from OSRM, then persisted in PostgreSQL.
 
-> **Project status:** Active development. This project is designed to demonstrate backend engineering, API design, database modeling, optimization, and automated testing.
+> **Project status:** MVP for local testing and product validation. It is not yet configured as a production-ready service.
 
 ## Features
 
@@ -20,6 +20,9 @@ Built with Python and FastAPI, the project combines optimization algorithms, roa
 - **Road-route geometry:** Return each optimized route's saved road geometry as a GeoJSON `LineString`.
 - **Order history:** Review delivery plans associated with an order.
 - **Operational dashboard:** Retrieve order counts by status, registered vehicles, and saved delivery plans.
+- **Web dashboard:** Manage orders and vehicles, update delivery status, create plans, and inspect routes.
+- **Mobile app:** Use the same operational flows from Expo Go on Android and iOS.
+- **Location selection:** Search addresses, select points on an interactive map, or request device location.
 - **Interactive API documentation:** Explore endpoints using Swagger UI.
 - **Automated tests:** Validate API behavior and core planning workflows with Pytest.
 
@@ -44,7 +47,7 @@ Built with Python and FastAPI, the project combines optimization algorithms, roa
 RouteWise separates API handling, request validation, business logic, optimization, and database persistence.
 
 ```text
-                 API Clients
+              Web / Mobile Clients
                       |
                       v
                 FastAPI API
@@ -103,6 +106,11 @@ routewise/
 │   │   ├── plan_persistence.py
 │   │   └── route_optimizer.py
 │   └── main.py
+├── frontend/
+│   ├── demo/                 # React web dashboard
+│   └── mobile/               # Expo React Native app (SDK 57)
+├── packages/
+│   └── react-ui/             # Shared web UI package
 ├── tests/
 ├── .env.example
 ├── .gitignore
@@ -115,6 +123,7 @@ routewise/
 - Python 3.14, matching the current development environment.
 - PostgreSQL.
 - Git.
+- Node.js and npm for the React frontend.
 - An OSRM-compatible routing service for workflows that require road-network distances or durations.
 
 Use a Python version and package combination validated against `requirements.txt`.
@@ -189,6 +198,60 @@ The API will be available at:
 - **Swagger documentation:** `http://127.0.0.1:8000/docs`
 - **Health check:** `http://127.0.0.1:8000/health`
 
+### 7. Run the frontend
+
+In a second PowerShell terminal, from the repository root:
+
+```powershell
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173`. The frontend connects to `http://127.0.0.1:8000` by default; override it by setting `VITE_ROUTEWISE_API_URL` in `frontend/demo/.env.local`.
+
+The web dashboard can register and list orders and vehicles, update an order's delivery status, create a route plan from pending registered orders and selected vehicles, and browse saved plans on the map. The plan workflow needs a working OSRM service and a PostgreSQL database initialized as described above. Interactive API docs are available at `http://127.0.0.1:8000/docs`.
+
+When registering an order, the frontend lets the user search for an address using OpenStreetMap Nominatim, select a point on the map, or explicitly request a fresh, high-accuracy device location. Browser geolocation requires the user's permission and a secure context (HTTPS, or localhost during development). The browser and operating system choose available location sensors; the web API cannot require GPS-only positioning. The interface displays the reported accuracy radius and warns when it is greater than 100 meters, while allowing the user to adjust the pin. Address search requires internet access. The demo spaces Nominatim searches by at least one second and requests results only after the user submits a search; for production or high traffic, use a hosted geocoding provider or operate your own service in accordance with the provider's usage policy. The backend currently persists the selected coordinates, not the display name returned by address search.
+
+### 8. Run the React Native app
+
+The Expo app lives in `frontend/mobile`, targets Expo SDK 57, and uses the same API as the web demo. Install the workspace dependencies from the repository root, then start Expo Go explicitly:
+
+```powershell
+npm install
+npm run mobile -- --lan
+```
+
+Open the project with Expo Go 57 on a phone or an Android emulator and scan the QR code. The root `mobile` command passes `--go`, so Expo Go remains the launch target. The Android emulator API URL defaults to `http://10.0.2.2:8000`; the iOS simulator uses `http://127.0.0.1:8000`.
+
+For a physical phone, `127.0.0.1` refers to the phone itself, not the development PC:
+
+1. Connect the phone and PC to the same Wi-Fi network.
+2. Start the API so it accepts connections from the local network:
+
+   ```powershell
+   python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+   ```
+
+3. Find the PC's Wi-Fi IPv4 address with `ipconfig`, then set the app's **API** URL to `http://<PC-IP>:8000`, for example `http://192.168.1.20:8000`.
+4. If the phone cannot open `http://<PC-IP>:8000/health`, allow port `8000` through Windows Firewall and verify both devices are on the same network.
+
+Location search and maps require internet access. The mobile app renders interactive maps in a WebView using Leaflet and Esri World Street Map tiles; map attribution is shown in the app, and no Google Maps API key is needed for Expo Go or APK builds. Address search uses OpenStreetMap Nominatim. The phone requests foreground location permission when **Usar GPS** is tapped and shows the device-reported accuracy estimate. Android/iOS choose available sensors; the app cannot demand GPS-only positioning. The backend stores the selected coordinates, not the human-readable address.
+
+Local HTTP is enabled for development and preview builds. The production profile disables cleartext traffic, so use HTTPS for a deployed backend.
+
+To build an optional Android development APK instead of using Expo Go, log in to EAS and run:
+
+```powershell
+Set-Location frontend\mobile
+npx eas-cli@latest login
+npx eas-cli@latest build --platform android --profile development
+```
+
+After installing the development APK from the EAS build link, start Metro from the repository root with `npm run mobile:dev -- --lan`. Build a new development APK after changing native dependencies or app configuration; JavaScript-only changes can use Fast Refresh.
+
+The `preview` profile in `frontend/mobile/eas.json` produces an internal-distribution APK. The `production` profile produces an Android App Bundle for Play Store distribution. EAS cloud builds need an Expo account and will prompt you to create or select Android signing credentials; local Android builds additionally need Android Studio and the Android SDK.
+
 ## API Capabilities
 
 The API provides operations for:
@@ -249,6 +312,16 @@ python -m compileall app tests
 
 The tests cover API behavior, order lifecycle rules, planning workflows, and relevant failure scenarios.
 
+Validate the frontend workspaces from the repository root:
+
+```powershell
+npm run build
+Set-Location frontend\mobile
+npm run typecheck
+npm run lint
+npx expo-doctor
+```
+
 ## Configuration and Security
 
 - Database connection details are provided through environment variables.
@@ -265,7 +338,9 @@ Before public production deployment, additional measures such as authentication,
 - [ ] Add CI automation for tests and code quality checks.
 - [ ] Improve structured logging and observability.
 - [ ] Add API performance and concurrency testing.
-- [ ] Build a web dashboard for delivery operations.
+- [x] Build an initial web dashboard for delivery operations.
+- [x] Build an initial Expo mobile app for delivery operations.
+- [ ] Add frontend component and interaction tests.
 - [ ] Evaluate cost-effective deployment options.
 - [ ] Document API examples and architecture decisions.
 

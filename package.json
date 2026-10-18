@@ -4,10 +4,17 @@
   "version": "0.1.0",
   "workspaces": [
     "frontend/demo",
+    "frontend/mobile",
     "packages/react-ui"
   ],
+  "dependencies": {
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
   "scripts": {
     "build": "npm run build --workspace @routewise/react-ui && npm run build --workspace routewise-demo",
-    "dev": "npm run dev --workspace routewise-demo"
+    "dev": "npm run dev --workspace routewise-demo",
+    "mobile": "npm run start --workspace routewise-mobile -- --go",
+    "mobile:dev": "npm run start --workspace routewise-mobile -- --dev-client"
   }
 }

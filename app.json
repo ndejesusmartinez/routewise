@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "55392dfb-56dc-4cd0-883a-6bef3d816f6a"
+      }
+    },
+    "android": {
+      "package": "com.ndejesus2297.routewiseworkspace"
+    }
+  }
+}
